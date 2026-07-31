@@ -14,9 +14,6 @@
      <a href="https://codecov.io/gh/traggo/server">
         <img alt="codecov" src="https://codecov.io/gh/traggo/server/branch/master/graph/badge.svg">
     </a>
-    <a href="https://goreportcard.com/report/github.com/traggo/server">
-        <img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/traggo/server">
-    </a>
     <a href="https://hub.docker.com/r/traggo/server">
         <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/traggo/server.svg">
     </a>
