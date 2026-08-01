@@ -13,7 +13,7 @@ import {EditGlass} from './Entry/EditGlass';
 import {Fade} from '../common/Fade';
 import {CenteredSpinner} from '../common/CenteredSpinner';
 import {AddPopup} from './Entry/AddPopup';
-import {Paper} from '@material-ui/core';
+import {Paper, Typography} from '@material-ui/core';
 import {Center} from '../common/Center';
 import {RemoveDashboardEntry, RemoveDashboardEntryVariables} from '../gql/__generated__/RemoveDashboardEntry';
 import {RouteChildrenProps} from 'react-router';
@@ -21,6 +21,7 @@ import {useSnackbar} from 'notistack';
 import {DateRanges} from './DateRanges';
 import {Range} from '../utils/range';
 import {useStateAndDelegateWithDelayOnChange} from '../utils/hooks';
+import {ExternalUrlDialog, getExternalUrl, kioskUrl, setExternalUrl} from './ExternalView';
 
 enum ViewType {
     Mobile = 'mobile',
@@ -90,6 +91,10 @@ export const DashboardPage: React.FC<RouterProps> = ({match, history}) => {
     const [ranges, setRanges] = useStateAndDelegateWithDelayOnChange<Record<number, Range>>({}, setDiagramRanges, 2000);
     const [addEntry, setAddEntry] = React.useState<null | Dashboards_dashboards_items>(null);
     const [[editElement, editEntry], setEdit] = React.useState<[null] | [HTMLElement, Dashboards_dashboards_items]>([null]);
+    const [externalDialogOpen, setExternalDialogOpen] = React.useState(false);
+    const [externalUrl, setExternalUrlState] = React.useState<string>(() =>
+        match && match.params.id ? getExternalUrl(parseInt(match.params.id, 10)) : ''
+    );
     const {loading, data, error} = useQuery<Dashboards>(gqlDashboard.Dashboards);
     const [updatePos] = useMutation<UpdatePos, UpdatePosVariables>(gqlDashboard.UpdatePos, {
         refetchQueries: [{query: gqlDashboard.Dashboards}],
@@ -156,137 +161,187 @@ export const DashboardPage: React.FC<RouterProps> = ({match, history}) => {
         }).then(console.log);
     };
 
-    return (
-        <>
-            <div style={{display: 'flex'}}>
-                <div style={{flex: 1}}>
-                    <DateRanges setRanges={setRanges} ranges={ranges} changeMode={changeMode} dashboard={dashboard} />
-                </div>
-                <div>
-                    {changeMode ? (
-                        <Button
-                            onClick={() => setViewType(viewType === ViewType.Desktop ? ViewType.Mobile : ViewType.Desktop)}
-                            variant={'outlined'}
-                            style={{marginRight: 10}}>
-                            {viewType === ViewType.Mobile ? 'Desktop View' : 'Mobile View'}
-                        </Button>
-                    ) : null}
-                    {changeMode ? (
-                        <Button
-                            onClick={() => {
-                                setAddEntry(newEntry());
-                                endRef.current!.scrollIntoView({behavior: 'smooth'});
-                            }}
-                            variant={'outlined'}
-                            style={{marginRight: 10}}>
-                            Add Entry
-                        </Button>
-                    ) : null}
+    let content: React.ReactNode;
+    if (externalUrl) {
+        content = (
+            <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+                <div style={{display: 'flex', alignItems: 'center', marginBottom: 10}}>
+                    <div style={{flex: 1}}>
+                        <Typography variant={'h5'}>Dashboard: {dashboard.name}</Typography>
+                    </div>
                     <Button
-                        onClick={() => {
-                            setViewType(ViewType.Desktop);
-                            setChangeMode(!changeMode);
-                        }}
+                        href={externalUrl}
+                        target={'_blank'}
+                        rel={'noopener noreferrer'}
                         variant={'outlined'}
                         color={'primary'}
                         style={{marginRight: 10}}>
-                        {changeMode ? 'Exit Editing' : 'Edit Dashboard'}
+                        Open externally
+                    </Button>
+                    <Button variant={'outlined'} onClick={() => setExternalDialogOpen(true)}>
+                        Configure
                     </Button>
                 </div>
+                <iframe
+                    src={kioskUrl(externalUrl)}
+                    title={dashboard.name}
+                    style={{width: '100%', flex: 1, border: 0, minHeight: 0}}
+                />
             </div>
-            <div
-                style={
-                    viewType === ViewType.Desktop
-                        ? {}
-                        : {borderRight: '5px dotted grey', borderLeft: '5px dotted grey', maxWidth: 700, margin: '0 auto'}
-                }>
-                <WidthAwareReactGrid
-                    key={viewType}
-                    cols={cols[viewType]}
-                    className="layout"
-                    rowHeight={50}
-                    preventCollision={true}
-                    useCSSTransforms={false}
-                    autoSize={true}
-                    layout={l}
-                    onDragStop={updatePosHandler}
-                    onResizeStop={updatePosHandler}
-                    compactType={null}
-                    isResizable={changeMode}
-                    isDraggable={changeMode}>
-                    {dashboardEntries.map((entry) => {
-                        const currentEditedAndPreviewed = preview && editEntry && editEntry.id === entry.id;
-                        return (
-                            <div key={'' + entry.id}>
-                                <DashboardEntry ranges={indexedRanges} entry={currentEditedAndPreviewed ? editEntry! : entry} />
-                                {changeMode ? (
-                                    <Fade fullyVisible={!currentEditedAndPreviewed} opacity={0}>
-                                        <EditGlass
-                                            doEdit={(elm) => setEdit([elm, clone(entry)])}
-                                            doDelete={() => removeDashboardEntry({variables: {id: entry.id}})}
-                                        />
-                                    </Fade>
+        );
+    } else {
+        content = (
+            <>
+                <div style={{display: 'flex'}}>
+                    <div style={{flex: 1}}>
+                        <DateRanges setRanges={setRanges} ranges={ranges} changeMode={changeMode} dashboard={dashboard} />
+                    </div>
+                    <div>
+                        {changeMode ? (
+                            <Button
+                                onClick={() => setViewType(viewType === ViewType.Desktop ? ViewType.Mobile : ViewType.Desktop)}
+                                variant={'outlined'}
+                                style={{marginRight: 10}}>
+                                {viewType === ViewType.Mobile ? 'Desktop View' : 'Mobile View'}
+                            </Button>
+                        ) : null}
+                        {changeMode ? (
+                            <Button
+                                onClick={() => {
+                                    setAddEntry(newEntry());
+                                    endRef.current!.scrollIntoView({behavior: 'smooth'});
+                                }}
+                                variant={'outlined'}
+                                style={{marginRight: 10}}>
+                                Add Entry
+                            </Button>
+                        ) : null}
+                        <Button onClick={() => setExternalDialogOpen(true)} variant={'outlined'} style={{marginRight: 10}}>
+                            External View
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                setViewType(ViewType.Desktop);
+                                setChangeMode(!changeMode);
+                            }}
+                            variant={'outlined'}
+                            color={'primary'}
+                            style={{marginRight: 10}}>
+                            {changeMode ? 'Exit Editing' : 'Edit Dashboard'}
+                        </Button>
+                    </div>
+                </div>
+                <div
+                    style={
+                        viewType === ViewType.Desktop
+                            ? {}
+                            : {borderRight: '5px dotted grey', borderLeft: '5px dotted grey', maxWidth: 700, margin: '0 auto'}
+                    }>
+                    <WidthAwareReactGrid
+                        key={viewType}
+                        cols={cols[viewType]}
+                        className="layout"
+                        rowHeight={50}
+                        preventCollision={true}
+                        useCSSTransforms={false}
+                        autoSize={true}
+                        layout={l}
+                        onDragStop={updatePosHandler}
+                        onResizeStop={updatePosHandler}
+                        compactType={null}
+                        isResizable={changeMode}
+                        isDraggable={changeMode}>
+                        {dashboardEntries.map((entry) => {
+                            const currentEditedAndPreviewed = preview && editEntry && editEntry.id === entry.id;
+                            return (
+                                <div key={'' + entry.id}>
+                                    <DashboardEntry
+                                        ranges={indexedRanges}
+                                        entry={currentEditedAndPreviewed ? editEntry! : entry}
+                                    />
+                                    {changeMode ? (
+                                        <Fade fullyVisible={!currentEditedAndPreviewed} opacity={0}>
+                                            <EditGlass
+                                                doEdit={(elm) => setEdit([elm, clone(entry)])}
+                                                doDelete={() => removeDashboardEntry({variables: {id: entry.id}})}
+                                            />
+                                        </Fade>
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                        {addEntry ? (
+                            <div
+                                key={'' + EditId}
+                                ref={(ref: HTMLDivElement) => {
+                                    setAddRef(ref);
+                                    if (ref) {
+                                        ref.scrollIntoView({behavior: 'smooth'});
+                                    }
+                                }}>
+                                {preview ? (
+                                    <DashboardEntry ranges={indexedRanges} key="uff" entry={addEntry} />
+                                ) : (
+                                    <Paper style={{width: '100%', height: '100%'}}>
+                                        <Center>New Entry</Center>
+                                    </Paper>
+                                )}
+
+                                {addRef ? (
+                                    <AddPopup
+                                        maxY={maxY}
+                                        dashboardId={dashboard.id}
+                                        preview={preview}
+                                        ranges={rangeToName()}
+                                        doPreview={setPreview}
+                                        entry={addEntry}
+                                        anchorEl={addRef}
+                                        onChange={(e) => {
+                                            return setAddEntry(clone(e));
+                                        }}
+                                        finish={() => {
+                                            setAddEntry(null);
+                                            setAddRef(null);
+                                        }}
+                                    />
                                 ) : null}
                             </div>
-                        );
-                    })}
-                    {addEntry ? (
-                        <div
-                            key={'' + EditId}
-                            ref={(ref: HTMLDivElement) => {
-                                setAddRef(ref);
-                                if (ref) {
-                                    ref.scrollIntoView({behavior: 'smooth'});
-                                }
-                            }}>
-                            {preview ? (
-                                <DashboardEntry ranges={indexedRanges} key="uff" entry={addEntry} />
-                            ) : (
-                                <Paper style={{width: '100%', height: '100%'}}>
-                                    <Center>New Entry</Center>
-                                </Paper>
-                            )}
-
-                            {addRef ? (
-                                <AddPopup
-                                    maxY={maxY}
-                                    dashboardId={dashboard.id}
-                                    preview={preview}
-                                    ranges={rangeToName()}
-                                    doPreview={setPreview}
-                                    entry={addEntry}
-                                    anchorEl={addRef}
-                                    onChange={(e) => {
-                                        return setAddEntry(clone(e));
-                                    }}
-                                    finish={() => {
-                                        setAddEntry(null);
-                                        setAddRef(null);
-                                    }}
-                                />
-                            ) : null}
-                        </div>
-                    ) : (
-                        []
-                    )}
-                </WidthAwareReactGrid>
-            </div>
-            {editElement !== null && editEntry !== null ? (
-                <EditPopup
-                    preview={preview}
-                    ranges={rangeToName()}
-                    doPreview={setPreview}
-                    entry={editEntry!}
-                    anchorEl={editElement}
-                    onChange={(entry) => {
-                        if (entry === null) {
-                            setEdit([null]);
-                        } else {
-                            setEdit([editElement, entry]);
-                        }
-                    }}
-                />
-            ) : null}
+                        ) : (
+                            []
+                        )}
+                    </WidthAwareReactGrid>
+                </div>
+                {editElement !== null && editEntry !== null ? (
+                    <EditPopup
+                        preview={preview}
+                        ranges={rangeToName()}
+                        doPreview={setPreview}
+                        entry={editEntry!}
+                        anchorEl={editElement}
+                        onChange={(entry) => {
+                            if (entry === null) {
+                                setEdit([null]);
+                            } else {
+                                setEdit([editElement, entry]);
+                            }
+                        }}
+                    />
+                ) : null}
+            </>
+        );
+    }
+    return (
+        <>
+            {content}
+            <ExternalUrlDialog
+                open={externalDialogOpen}
+                url={externalUrl}
+                onSave={(url) => {
+                    setExternalUrl(dashboard.id, url);
+                    setExternalUrlState(url);
+                }}
+                onClose={() => setExternalDialogOpen(false)}
+            />
             <div ref={endRef} />
         </>
     );
